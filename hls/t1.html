@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HLS 和 WebSocket 示例</title>
+    <style>
+        /* 页面整体布局 */
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #6e7bff, #5f63e3);
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            color: #fff;
+        }
+
+        h2 {
+            font-size: 1.8rem;
+            margin-top: 40px;
+        }
+
+        /* 语言选择 */
+        #languageSelect {
+            margin: 20px;
+            padding: 10px;
+            font-size: 1rem;
+            border-radius: 5px;
+            background: #fff;
+            color: #333;
+        }
+
+        /* 表单区域 */
+        .form-container {
+            background: rgba(0, 0, 0, 0.6);
+            padding: 20px;
+            border-radius: 10px;
+            width: 100%;
+            max-width: 900px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        label {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+        }
+
+        textarea {
+            width: 80%;
+            padding: 10px;
+            font-size: 1rem;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            margin-bottom: 20px;
+            resize: vertical;
+            min-height: 100px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+
+        button {
+            background: #6e7bff;
+            border: none;
+            padding: 12px 20px;
+            font-size: 1.1rem;
+            color: #fff;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background: #5f63e3;
+            transform: translateY(-2px);
+        }
+
+        /* WebSocket 日志区域 */
+        #log {
+            background: #333;
+            color: #f4f4f4;
+            padding: 15px;
+            border-radius: 10px;
+            width: 80%;
+            max-width: 900px;
+            height: 300px;
+            margin-top: 20px;
+            overflow-y: auto;
+            font-family: monospace;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .log-entry {
+            margin: 5px 0;
+            word-wrap: break-word;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .form-container {
+                width: 90%;
+                padding: 15px;
+            }
+
+            textarea {
+                width: 100%;
+            }
+
+            button {
+                width: 100%;
+            }
+
+            #log {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <h1 id="title">HLS 流媒体播放和 WebSocket 示例</h1>
+
+    <!-- 语言选择 -->
+    <div>
+        <label for="languageSelect">选择语言：</label>
+        <select id="languageSelect">
+            <option value="zh">中文</option>
+            <option value="en">English</option>
+            <option value="tr">Türkçe</option>
+        </select>
+    </div>
+	
+		
+	<!-- 视频播放器 -->
+    <video id="video" controls width="600" height="400" muted></video>
+
+    <!-- 表单区域 -->
+    <div class="form-container">
+        <label for="videoUrl" id="videoUrlLabel">输入视频链接：</label>
+        <textarea id="videoUrl" rows="4" cols="50" placeholder="请输入.m3u8链接"></textarea><br>
+        <button id="loadVideo">加载视频并播放</button>
+        <button id="startWs">启动 WebSocket</button>
+    </div>
+
+
+    <h2 id="wsLogTitle">WebSocket 日志：</h2>
+    <div id="log"></div>
+
+    <script src="./hls.js"></script>
+    <script>
+        var video = document.getElementById('video');
+        var loadButton = document.getElementById('loadVideo');
+        var startWsButton = document.getElementById('startWs');
+        var videoUrlInput = document.getElementById('videoUrl');
+        var ws = null; // WebSocket 实例
+        var logContainer = document.getElementById('log'); // 用来显示日志的容器
+        var languageSelect = document.getElementById('languageSelect');
+        
+        var translations = {
+            zh: {
+                title: "HLS 流媒体播放和 WebSocket 示例",
+                videoUrlLabel: "输入视频链接：",
+                loadButton: "加载视频并播放",
+                startWsButton: "启动 WebSocket",
+                wsLogTitle: "WebSocket 日志：",
+                videoPlaceholder: "请输入.m3u8链接",
+                alertEmptyUrl: "请输入有效的 .m3u8 视频链接！",
+                alertEmptyWsUrl: "请输入有效的 URL！",
+                wsSuccess: "WebSocket 连接成功: ",
+                wsError: "WebSocket 错误: ",
+                wsClosed: "WebSocket 连接已关闭",
+                receivedMessage: "接收到消息: "
+            },
+            en: {
+                title: "HLS Streaming and WebSocket Example",
+                videoUrlLabel: "Enter video URL:",
+                loadButton: "Load Video and Play",
+                startWsButton: "Start WebSocket",
+                wsLogTitle: "WebSocket Log:",
+                videoPlaceholder: "Enter .m3u8 URL",
+                alertEmptyUrl: "Please enter a valid .m3u8 video URL!",
+                alertEmptyWsUrl: "Please enter a valid URL!",
+                wsSuccess: "WebSocket connection successful: ",
+                wsError: "WebSocket Error: ",
+                wsClosed: "WebSocket connection closed",
+                receivedMessage: "Message received: "
+            },
+            tr: {
+                title: "HLS Akış ve WebSocket Örneği",
+                videoUrlLabel: "Video URL'sini girin:",
+                loadButton: "Videoyu Yükle ve Oynat",
+                startWsButton: "WebSocket Başlat",
+                wsLogTitle: "WebSocket Günlüğü:",
+                videoPlaceholder: ".m3u8 URL'sini girin",
+                alertEmptyUrl: "Lütfen geçerli bir .m3u8 video URL'si girin!",
+                alertEmptyWsUrl: "Lütfen geçerli bir URL girin!",
+                wsSuccess: "WebSocket bağlantısı başarılı: ",
+                wsError: "WebSocket Hatası: ",
+                wsClosed: "WebSocket bağlantısı kapandı",
+                receivedMessage: "Mesaj alındı: "
+            }
+        };
+
+        // 根据选择的语言更新页面文本
+        function updateLanguage(lang) {
+            var t = translations[lang];
+            document.getElementById('title').textContent = t.title;
+            document.getElementById('videoUrlLabel').textContent = t.videoUrlLabel;
+            document.getElementById('loadVideo').textContent = t.loadButton;
+            document.getElementById('startWs').textContent = t.startWsButton;
+            document.getElementById('wsLogTitle').textContent = t.wsLogTitle;
+            document.getElementById('videoUrl').placeholder = t.videoPlaceholder;
+        }
+
+        // 添加日志信息的函数
+        function logMessage(message) {
+            var logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.textContent = message;
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight; // 滚动到底部
+        }
+
+        // 加载并播放视频的函数
+        // 加载并播放视频的函数
+// 加载并播放视频的函数
+function loadAndPlayVideo(url) {
+    // 如果已经有 HLS 实例，先销毁它，避免重复实例化
+    if (hls) {
+        hls.destroy();
+    }
+
+    // 创建一个新的 HLS 实例
+    var hls = new Hls({
+        fragLoadingMaxRetry: 999999,  // 最大重试次数
+        maxBufferLength: 20,          // 设置最大缓冲区长度
+        maxMaxBufferLength: 60,       // 设置缓冲最大最大长度
+        liveSyncDuration: 1,          // 设置实时同步
+        enableWorker: true,           // 启用 Web Worker 来进行异步操作
+        progressive: true             // 边下载边播放
+    });
+
+    // 加载视频流
+    hls.loadSource(url);
+
+    // 将 HLS 绑定到 video 元素
+    hls.attachMedia(video);
+
+    // 清空视频的播放状态
+    video.pause();  // 强制暂停视频
+    video.currentTime = 0;  // 将时间重置为 0
+
+    // 监听 MANIFEST_PARSED 事件，视频的元数据已经解析完毕
+    hls.on(Hls.Events.MANIFEST_PARSED, function () {
+        // 确保视频从头开始播放
+        video.play();  // 开始播放视频
+    });
+
+    // 错误处理，捕获加载过程中的任何错误
+    hls.on(Hls.Events.ERROR, function(event, data) {
+        console.error("HLS 错误:", data);
+    });
+
+    // 强制每次播放时都从头开始
+    hls.on(Hls.Events.LEVEL_LOADED, function () {
+        video.currentTime = 0; // 每次加载新的流时，从头开始播放
+    });
+}
+
+
+
+        // 启动 WebSocket连接
+        function startWebSocket(url) {
+            var wsUrl = url + ".heart"; // 拼接 WebSocket URL
+            ws = new WebSocket(wsUrl);
+
+            // WebSocket 连接成功时
+            ws.onopen = function () {
+                logMessage(translations[languageSelect.value].wsSuccess + wsUrl);
+            };
+
+            // WebSocket 接收到消息时
+            ws.onmessage = function (event) {
+                logMessage(translations[languageSelect.value].receivedMessage + event.data);
+            };
+
+            // WebSocket 发生错误时
+            ws.onerror = function (error) {
+                logMessage(translations[languageSelect.value].wsError + JSON.stringify(error));
+            };
+
+            // WebSocket 关闭时
+            ws.onclose = function () {
+                logMessage(translations[languageSelect.value].wsClosed);
+            };
+        }
+
+        // 按钮点击事件，加载视频并播放
+        loadButton.addEventListener('click', function () {
+            var url = videoUrlInput.value.trim();
+            if (url) {
+                loadAndPlayVideo(url);
+            } else {
+                alert(translations[languageSelect.value].alertEmptyUrl);
+            }
+        });
+
+        // 按钮点击事件，启动 WebSocket 连接
+        startWsButton.addEventListener('click', function () {
+            var url = videoUrlInput.value.trim();
+            if (url) {
+                startWebSocket(url);
+            } else {
+                alert(translations[languageSelect.value].alertEmptyWsUrl);
+            }
+        });
+
+        // 监听语言选择变化
+        languageSelect.addEventListener('change', function () {
+            updateLanguage(languageSelect.value);
+        });
+
+        // 初始语言
+        updateLanguage('zh');
+    </script>
+
+</body>
+</html>
