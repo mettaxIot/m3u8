@@ -168,6 +168,7 @@
         var ws = null; // WebSocket 实例
         var logContainer = document.getElementById('log'); // 用来显示日志的容器
         var languageSelect = document.getElementById('languageSelect');
+		var isFirstLoad = true;  // 标记是否是首次加载
         
         var translations = {
             zh: {
@@ -252,6 +253,8 @@ function loadAndPlayVideo(url) {
         enableWorker: true,           // 启用 Web Worker 来进行异步操作
         progressive: true             // 边下载边播放
     });
+	
+	isFirstLoad = true;
 
     // 加载视频流
     hls.loadSource(url);
@@ -261,12 +264,16 @@ function loadAndPlayVideo(url) {
 
     // 清空视频的播放状态
     video.pause();  // 强制暂停视频
+	console.info("currentTime1"+video.currentTime);
+	
     video.currentTime = 0;  // 将时间重置为 0
 
     // 监听 MANIFEST_PARSED 事件，视频的元数据已经解析完毕
     hls.on(Hls.Events.MANIFEST_PARSED, function () {
         // 确保视频从头开始播放
+		console.info("currentTime2"+video.currentTime);
         video.play();  // 开始播放视频
+		console.info("currentTime3"+video.currentTime);
     });
 
     // 错误处理，捕获加载过程中的任何错误
@@ -276,7 +283,10 @@ function loadAndPlayVideo(url) {
 
     // 强制每次播放时都从头开始
     hls.on(Hls.Events.LEVEL_LOADED, function () {
-        video.currentTime = 0; // 每次加载新的流时，从头开始播放
+		if(isFirstLoad){		
+			video.currentTime = 0; // 每次加载新的流时，从头开始播放
+			isFirstLoad =false;		//限定首次加载时，重头开始播放
+		}
     });
 }
 
